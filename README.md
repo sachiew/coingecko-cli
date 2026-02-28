@@ -15,6 +15,9 @@
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+<img width="706" height="880" alt="Screenshot 2026-02-28 at 3 01 04 PM" src="https://github.com/user-attachments/assets/152ca1f7-bf45-4754-89dc-3db782e68761" />
+
+
 ---
 
 ## Features
