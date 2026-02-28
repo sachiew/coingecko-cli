@@ -21,12 +21,15 @@
 
 - **Live prices** — fetch prices for any coin across multiple currencies
 - **Market overview** — ranked market cap table with 24h change and volume
+- **Trending** — top 15 coins, top 7 NFTs, and top 6 categories trending on CoinGecko
+- **Historical data** — single-date snapshots, relative ranges, or custom date ranges
 - **Auto-pagination** — fetch more than 250 coins seamlessly across API pages
+- **Smart chunking** — date ranges > 90 days are automatically split and stitched
 - **Symbol resolution** — use `btc`, `eth`, `sol` instead of remembering coin IDs
 - **Full-text search** — find any coin by name or ticker
 - **Persistent auth** — API key stored securely in your OS config directory
 - **Demo & Pro support** — works with both CoinGecko API tiers
-- **CSV Export** — save market data to a CSV file with `--export`
+- **CSV Export** — save market or historical data to a CSV file with `--export`
 
 ---
 
@@ -68,11 +71,15 @@ Get a free API key at [coingecko.com/en/api](https://www.coingecko.com/en/api).
 ## Quick Start
 
 ```bash
-cg auth                        # Configure your API key
-cg price --ids bitcoin         # Get BTC price in USD
-cg markets --total 50          # Top 50 coins by market cap
-cg search solana               # Search for a coin
-cg status                      # Check saved credentials
+cg auth                                       # Configure your API key
+cg price --ids bitcoin                        # Get BTC price in USD
+cg markets --total 50                         # Top 50 coins by market cap
+cg search solana                              # Search for a coin
+cg trending                                   # Trending coins, NFTs & categories
+cg history bitcoin --days 30                  # 30-day price chart
+cg history bitcoin --date 2024-01-01          # Single date snapshot
+cg history bitcoin --from 2023-01-01 --to 2024-01-01  # 1-year range
+cg status                                     # Check saved credentials
 ```
 
 Run `cg` with no arguments to open the branded landing screen.
@@ -194,6 +201,72 @@ cg search "wrapped steth"
 | Option | Description | Default |
 |---|---|---|
 | `--limit` | Max number of results to display | `10` |
+
+---
+
+### `trending`
+
+Display what's trending on CoinGecko right now — updated every few minutes by the CoinGecko platform.
+
+```bash
+cg trending
+```
+
+Renders three tables with live 24h data:
+
+| Table | Contents |
+|---|---|
+| Top 15 Trending Coins | Name, symbol, market cap rank, price, 24h change |
+| Top 7 Trending NFTs | Collection name, floor price, 24h change |
+| Top 6 Trending Categories | Category name, coin count, market cap, 24h change |
+
+---
+
+### `history`
+
+Fetch historical price, market cap, and volume data for any coin. Three routing modes are available depending on the flags you provide.
+
+#### Case A — Single date snapshot
+
+Uses `/coins/{id}/history`. Returns the price at a specific date.
+
+```bash
+cg history bitcoin --date 2024-01-01
+cg history ethereum --date 2021-11-10 --vs eur
+```
+
+#### Case B — Relative range
+
+Uses `/coins/{id}/market_chart`. Returns hourly data for 1 day, daily data for longer periods.
+
+```bash
+cg history bitcoin --days 7
+cg history solana --days 90 --export solana_90d.csv
+```
+
+#### Case C — Custom date range
+
+Uses `/coins/{id}/market_chart/range`. Provide a start and end date.
+
+```bash
+cg history bitcoin --from 2024-01-01 --to 2024-06-30
+cg history ethereum --from 2022-01-01 --to 2023-12-31 --export eth_2yr.csv
+```
+
+> **Smart chunking:** if the requested range exceeds 90 days, the CLI automatically splits it into ≤90-day segments, fetches each in sequence, and stitches the results into a single dataset before display.
+
+**Shared options:**
+
+| Option | Description | Default |
+|---|---|---|
+| `--date` | Single date (YYYY-MM-DD) | — |
+| `--days` | Number of days back | — |
+| `--from` | Range start date (YYYY-MM-DD) | — |
+| `--to` | Range end date (YYYY-MM-DD) | — |
+| `--vs` | Quote currency | `usd` |
+| `--export` | Save results to a CSV file | — |
+
+The terminal table displays the most recent 50 data points. Use `--export` to get the full dataset as a CSV.
 
 ---
 
