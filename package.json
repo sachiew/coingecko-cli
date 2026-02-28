@@ -1,0 +1,29 @@
+{
+  "name": "coingecko-cli",
+  "version": "1.0.0",
+  "description": "Official CoinGecko CLI — real-time crypto data at your fingertips",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "coingecko": "./index.js",
+    "cg": "./index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "coingecko",
+    "crypto",
+    "cli",
+    "bitcoin",
+    "cryptocurrency"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.13.6",
+    "chalk": "^5.6.2",
+    "cli-table3": "^0.6.5",
+    "commander": "^14.0.3",
+    "conf": "^15.1.0"
+  }
+}
