@@ -31,10 +31,15 @@
 
 ## Installation
 
+### Try it instantly (No install required)
+```bash
+npx @sachiew/coingecko-cli
+```
+
+### Global Installation
 ```bash
 npm install -g @sachiew/coingecko-cli
 ```
-
 This registers two global commands: `coingecko` and the shorter alias `cg`.
 
 ### Local development
