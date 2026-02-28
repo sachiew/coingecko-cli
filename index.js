@@ -7,6 +7,8 @@ import chalk from 'chalk';
 import Table from 'cli-table3';
 import readline from 'readline';
 import boxen from 'boxen';
+import { writeFileSync } from 'fs';
+import { Parser } from 'json2csv';
 
 // ─── Brand Colors ─────────────────────────────────────────────────────────────
 const green  = chalk.hex('#8CC351');
@@ -176,7 +178,7 @@ program
     green('CoinGecko CLI') + ' — real-time crypto data from the terminal\n\n' +
     dim('  Tip: ') + chalk.cyan('cg') + dim(' is the official shortcut for ') + chalk.cyan('coingecko') + dim(' — use it for faster access.')
   )
-  .version('1.0.0', '-v, --version')
+  .version('1.1.0', '-v, --version')
   .action(() => {
     // No sub-command → show full branded landing screen
     printLogo();
@@ -325,9 +327,10 @@ program
 program
   .command('markets')
   .description('List top coins by market cap')
-  .option('--total <n>',    'Total number of coins to fetch (max limited by plan)', '100')
-  .option('--vs <currency>', 'vs currency', 'usd')
-  .option('--order <order>', 'Sort order', 'market_cap_desc')
+  .option('--total <n>',      'Total number of coins to fetch (max limited by plan)', '100')
+  .option('--vs <currency>',  'vs currency', 'usd')
+  .option('--order <order>',  'Sort order', 'market_cap_desc')
+  .option('--export <file>',  'Export data to a CSV file')
   .action(async (opts) => {
     printBanner();
 
@@ -412,6 +415,22 @@ program
 
     console.log(table.toString());
     console.log(dim(`  ${allCoins.length} coins  •  vs ${currency.toUpperCase()}  •  ${new Date().toLocaleTimeString()}\n`));
+
+    if (opts.export) {
+      const fields = [
+        { label: 'Rank',        value: 'market_cap_rank' },
+        { label: 'Name',        value: 'name' },
+        { label: 'Symbol',      value: 'symbol' },
+        { label: 'Price',       value: 'current_price' },
+        { label: '24h Change%', value: 'price_change_percentage_24h' },
+        { label: 'Market Cap',  value: 'market_cap' },
+        { label: '24h Volume',  value: 'total_volume' },
+      ];
+      const parser = new Parser({ fields });
+      const csv = parser.parse(allCoins);
+      writeFileSync(opts.export, csv);
+      console.log(chalk.green(`✅ Data exported to ${opts.export}\n`));
+    }
   });
 
 // ─── SEARCH ──────────────────────────────────────────────────────────────────

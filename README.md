@@ -26,6 +26,7 @@
 - **Full-text search** — find any coin by name or ticker
 - **Persistent auth** — API key stored securely in your OS config directory
 - **Demo & Pro support** — works with both CoinGecko API tiers
+- **CSV Export** — save market data to a CSV file with `--export`
 
 ---
 
@@ -147,6 +148,9 @@ cg markets --total 500
 
 # Top 50 in EUR, sorted by market cap
 cg markets --total 50 --vs eur --order market_cap_desc
+
+# Export top 300 coins to CSV
+cg markets --total 300 --export top_coins.csv
 ```
 
 | Option | Description | Default |
@@ -154,6 +158,7 @@ cg markets --total 50 --vs eur --order market_cap_desc
 | `--total` | Number of coins to fetch | `100` |
 | `--vs` | Quote currency | `usd` |
 | `--order` | Sort order (see CoinGecko API docs) | `market_cap_desc` |
+| `--export` | Save results to a CSV file | — |
 
 **Auto-pagination:** the CoinGecko API returns a maximum of 250 coins per request. If `--total` exceeds 250, the CLI automatically fetches additional pages and merges the results — no extra flags needed.
 
