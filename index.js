@@ -100,6 +100,76 @@ function formatChange(value) {
   return value >= 0 ? chalk.green(`▲ ${fixed}`) : chalk.red(`▼ ${fixed}`);
 }
 
+// ─── CSV Export Helper ────────────────────────────────────────────────────────
+function exportCSV(rows, fields, filename) {
+  const parser = new Parser({ fields });
+  const csv    = parser.parse(rows);
+  writeFileSync(filename, csv);
+  console.log(chalk.green(`✅ Data exported to ${filename}\n`));
+}
+
+// ─── Chart Data Display + Export Helper ──────────────────────────────────────
+function displayAndExportChartData(data, id, currency, exportFile) {
+  const prices = data.prices || [];
+
+  if (!prices.length) {
+    console.error(chalk.red('  ✖  No price data returned.'));
+    process.exit(1);
+  }
+
+  const rows = prices.map((entry, i) => {
+    const ts = entry[0];
+    const dt = new Date(ts);
+    const datetime = dt.toISOString().replace('T', ' ').substring(0, 16) + ' UTC';
+    return {
+      datetime,
+      price:        entry[1],
+      market_cap:   data.market_caps?.[i]?.[1] ?? null,
+      total_volume: data.total_volumes?.[i]?.[1] ?? null,
+    };
+  });
+
+  const DISPLAY_LIMIT = 50;
+  const showRows = rows.length > DISPLAY_LIMIT ? rows.slice(-DISPLAY_LIMIT) : rows;
+
+  if (rows.length > DISPLAY_LIMIT) {
+    console.log(
+      dim(`  Showing last ${DISPLAY_LIMIT} of ${rows.length} data points.`) +
+      ' Use ' + green('--export') + dim(' for the full dataset.\n')
+    );
+  }
+
+  const table = new Table({
+    head: [
+      green.bold('Date / Time (UTC)'),
+      green.bold(`Price (${currency.toUpperCase()})`),
+      green.bold('Market Cap'),
+      green.bold('24h Volume'),
+    ],
+    style:     { head: [], border: ['dim'] },
+    colAligns: ['left', 'right', 'right', 'right'],
+    colWidths: [22, 20, 16, 16],
+  });
+
+  for (const row of showRows) {
+    table.push([
+      chalk.white(row.datetime),
+      chalk.white(formatUSD(row.price)),
+      dim(formatLargeUSD(row.market_cap)),
+      dim(formatLargeUSD(row.total_volume)),
+    ]);
+  }
+
+  console.log(table.toString());
+  console.log(dim(
+    `  ${rows.length} data points  •  ${id} vs ${currency.toUpperCase()}  •  ${new Date().toLocaleTimeString()}\n`
+  ));
+
+  if (exportFile) {
+    exportCSV(rows, ['datetime', 'price', 'market_cap', 'total_volume'], exportFile);
+  }
+}
+
 // ─── ASCII Art Logo ───────────────────────────────────────────────────────────
 function printLogo() {
   const logo = [
@@ -117,7 +187,7 @@ function printLogo() {
 // ─── Welcome Box ─────────────────────────────────────────────────────────────
 function printWelcomeBox() {
   const subtitle  = yellow.bold('Official API Command Line Interface');
-  const separator = dim('─'.repeat(44));
+  const separator = dim('─'.repeat(48));
 
   const body = [
     subtitle,
@@ -126,10 +196,13 @@ function printWelcomeBox() {
     '',
     dim('Quick Start'),
     '',
-    `  ${green('$')} cg auth                      ${dim('# Set up your API key')}`,
-    `  ${green('$')} cg price --ids bitcoin        ${dim('# Get BTC price')}`,
-    `  ${green('$')} cg markets --total 100        ${dim('# Top 100 by market cap')}`,
-    `  ${green('$')} cg search ethereum            ${dim('# Search for a coin')}`,
+    `  ${green('$')} cg auth                        ${dim('# Set up your API key')}`,
+    `  ${green('$')} cg price --ids bitcoin          ${dim('# Get BTC price')}`,
+    `  ${green('$')} cg markets --total 100          ${dim('# Top 100 by market cap')}`,
+    `  ${green('$')} cg search ethereum              ${dim('# Search for a coin')}`,
+    `  ${green('$')} cg trending                     ${dim('# Trending coins, NFTs & categories')}`,
+    `  ${green('$')} cg history bitcoin --days 30    ${dim('# 30-day price history')}`,
+    `  ${green('$')} cg history bitcoin --date 2024-01-01  ${dim('# Snapshot')}`,
     '',
     separator,
     '',
@@ -178,7 +251,7 @@ program
     green('CoinGecko CLI') + ' — real-time crypto data from the terminal\n\n' +
     dim('  Tip: ') + chalk.cyan('cg') + dim(' is the official shortcut for ') + chalk.cyan('coingecko') + dim(' — use it for faster access.')
   )
-  .version('1.1.0', '-v, --version')
+  .version('1.2.0', '-v, --version')
   .action(() => {
     // No sub-command → show full branded landing screen
     printLogo();
@@ -426,10 +499,7 @@ program
         { label: 'Market Cap',  value: 'market_cap' },
         { label: '24h Volume',  value: 'total_volume' },
       ];
-      const parser = new Parser({ fields });
-      const csv = parser.parse(allCoins);
-      writeFileSync(opts.export, csv);
-      console.log(chalk.green(`✅ Data exported to ${opts.export}\n`));
+      exportCSV(allCoins, fields, opts.export);
     }
   });
 
@@ -477,6 +547,303 @@ program
 
     console.log(table.toString());
     console.log(chalk.green.bold(`  ✔  ${coins.length} result(s) for "${query}"\n`));
+  });
+
+// ─── TRENDING ─────────────────────────────────────────────────────────────────
+program
+  .command('trending')
+  .description('Show trending coins, NFTs, and categories on CoinGecko (24h)')
+  .action(async () => {
+    printBanner();
+    console.log(dim('  Fetching trending data...\n'));
+
+    const data = await makeRequest('/search/trending');
+
+    // ── Top 15 Trending Coins ───────────────────────────────────────────────
+    const coins = (data.coins || []).slice(0, 15);
+    if (coins.length) {
+      const coinTable = new Table({
+        head: [
+          green.bold('#'),
+          green.bold('Coin'),
+          green.bold('Symbol'),
+          green.bold('Rank'),
+          green.bold('Price (USD)'),
+          green.bold('24h Change'),
+        ],
+        style:     { head: [], border: ['dim'] },
+        colAligns: ['right', 'left', 'left', 'right', 'right', 'right'],
+        colWidths: [4, 24, 10, 8, 18, 14],
+      });
+
+      coins.forEach((entry, idx) => {
+        const item    = entry.item;
+        const price   = item.data?.price;
+        const change  = item.data?.price_change_percentage_24h?.usd;
+
+        // The API returns price as a pre-formatted string (e.g. "$0.00345")
+        const priceDisplay = price != null
+          ? (typeof price === 'number' ? chalk.white(formatUSD(price)) : chalk.white(String(price)))
+          : dim('N/A');
+
+        coinTable.push([
+          dim(idx + 1),
+          chalk.white.bold(item.name),
+          dim(item.symbol?.toUpperCase() ?? '—'),
+          item.market_cap_rank ? yellow(`#${item.market_cap_rank}`) : dim('—'),
+          priceDisplay,
+          formatChange(change),
+        ]);
+      });
+
+      console.log(green.bold('  ▸ Top 15 Trending Coins'));
+      console.log(coinTable.toString());
+    }
+
+    // ── Top 7 Trending NFTs ─────────────────────────────────────────────────
+    const nfts = (data.nfts || []).slice(0, 7);
+    if (nfts.length) {
+      const nftTable = new Table({
+        head: [
+          green.bold('#'),
+          green.bold('NFT Collection'),
+          green.bold('Symbol'),
+          green.bold('Floor Price'),
+          green.bold('24h Change'),
+        ],
+        style:     { head: [], border: ['dim'] },
+        colAligns: ['right', 'left', 'left', 'right', 'right'],
+        colWidths: [4, 30, 10, 18, 14],
+      });
+
+      nfts.forEach((nft, idx) => {
+        const change     = nft.data?.price_change_percentage_24h?.usd;
+        const floorPrice = nft.data?.floor_price ?? nft.floor_price_in_native_currency ?? null;
+
+        nftTable.push([
+          dim(idx + 1),
+          chalk.white.bold(nft.name),
+          dim(nft.symbol?.toUpperCase() ?? '—'),
+          floorPrice != null ? chalk.white(String(floorPrice)) : dim('N/A'),
+          formatChange(change),
+        ]);
+      });
+
+      console.log(green.bold('\n  ▸ Top 7 Trending NFTs'));
+      console.log(nftTable.toString());
+    }
+
+    // ── Top 6 Trending Categories ───────────────────────────────────────────
+    const categories = (data.categories || []).slice(0, 6);
+    if (categories.length) {
+      const catTable = new Table({
+        head: [
+          green.bold('#'),
+          green.bold('Category'),
+          green.bold('Coins'),
+          green.bold('Market Cap'),
+          green.bold('24h Change'),
+        ],
+        style:     { head: [], border: ['dim'] },
+        colAligns: ['right', 'left', 'right', 'right', 'right'],
+        colWidths: [4, 34, 8, 16, 14],
+      });
+
+      categories.forEach((cat, idx) => {
+        const change = cat.data?.market_cap_change_percentage_24h?.usd;
+
+        catTable.push([
+          dim(idx + 1),
+          chalk.white.bold(cat.name),
+          dim(cat.coins_count ?? '—'),
+          cat.data?.market_cap ? dim(formatLargeUSD(cat.data.market_cap)) : dim('N/A'),
+          formatChange(change),
+        ]);
+      });
+
+      console.log(green.bold('\n  ▸ Top 6 Trending Categories'));
+      console.log(catTable.toString());
+    }
+
+    console.log(dim(`\n  Trending data from CoinGecko  •  ${new Date().toLocaleTimeString()}\n`));
+  });
+
+// ─── HISTORY ─────────────────────────────────────────────────────────────────
+program
+  .command('history <id>')
+  .description('Get historical price data for a coin')
+  .option('--date <YYYY-MM-DD>',  'Single date snapshot via /coins/{id}/history')
+  .option('--days <n>',           'Relative days back via /coins/{id}/market_chart')
+  .option('--from <YYYY-MM-DD>',  'Range start date via /coins/{id}/market_chart/range')
+  .option('--to <YYYY-MM-DD>',    'Range end date via /coins/{id}/market_chart/range')
+  .option('--vs <currency>',      'vs currency', 'usd')
+  .option('--export <file>',      'Export data to a CSV file')
+  .action(async (id, opts) => {
+    printBanner();
+
+    const currency = opts.vs;
+
+    // ── Case A: Single Date Snapshot ─────────────────────────────────────────
+    if (opts.date) {
+      const [year, month, day] = opts.date.split('-');
+      if (!year || !month || !day) {
+        console.error(chalk.red('  ✖  Invalid date format. Use YYYY-MM-DD (e.g. 2024-01-15)'));
+        process.exit(1);
+      }
+      const apiDate = `${day}-${month}-${year}`;  // API expects DD-MM-YYYY
+
+      console.log(dim(`  Fetching snapshot for ${chalk.white(id)} on ${chalk.white(opts.date)}...\n`));
+
+      const data = await makeRequest(`/coins/${id}/history`, {
+        date:         apiDate,
+        localization: false,
+      });
+
+      if (!data.market_data) {
+        console.error(chalk.red(`  ✖  No market data found for "${id}" on ${opts.date}.`));
+        console.error(dim('     The coin may not have existed yet, or data is unavailable for this date.'));
+        process.exit(1);
+      }
+
+      const price  = data.market_data.current_price?.[currency];
+      const cap    = data.market_data.market_cap?.[currency];
+      const vol    = data.market_data.total_volume?.[currency];
+
+      const table = new Table({
+        head: [
+          green.bold('Coin'),
+          green.bold('Date'),
+          green.bold(`Price (${currency.toUpperCase()})`),
+          green.bold('Market Cap'),
+          green.bold('24h Volume'),
+        ],
+        style:     { head: [], border: ['dim'] },
+        colAligns: ['left', 'left', 'right', 'right', 'right'],
+        colWidths: [20, 14, 20, 16, 16],
+      });
+
+      table.push([
+        chalk.white.bold(data.name),
+        chalk.white(opts.date),
+        chalk.white(formatUSD(price)),
+        dim(formatLargeUSD(cap)),
+        dim(formatLargeUSD(vol)),
+      ]);
+
+      console.log(table.toString());
+      console.log(dim(`  Data from CoinGecko  •  ${new Date().toLocaleTimeString()}\n`));
+
+      if (opts.export) {
+        exportCSV(
+          [{ date: opts.date, price, market_cap: cap, total_volume: vol }],
+          ['date', 'price', 'market_cap', 'total_volume'],
+          opts.export
+        );
+      }
+      return;
+    }
+
+    // ── Case B: Relative Days ─────────────────────────────────────────────────
+    if (opts.days) {
+      const days = parseInt(opts.days, 10);
+      if (isNaN(days) || days < 1) {
+        console.error(chalk.red('  ✖  --days must be a positive integer.'));
+        process.exit(1);
+      }
+
+      console.log(dim(`  Fetching ${days}-day market chart for ${chalk.white(id)}...\n`));
+
+      const data = await makeRequest(`/coins/${id}/market_chart`, {
+        vs_currency: currency,
+        days,
+      });
+
+      displayAndExportChartData(data, id, currency, opts.export);
+      return;
+    }
+
+    // ── Case C: Date Range ────────────────────────────────────────────────────
+    if (opts.from && opts.to) {
+      const fromMs = new Date(opts.from).getTime();
+      const toMs   = new Date(opts.to).getTime();
+
+      if (isNaN(fromMs) || isNaN(toMs)) {
+        console.error(chalk.red('  ✖  Invalid date format. Use YYYY-MM-DD for --from and --to.'));
+        process.exit(1);
+      }
+      if (fromMs >= toMs) {
+        console.error(chalk.red('  ✖  --from must be earlier than --to.'));
+        process.exit(1);
+      }
+
+      const fromTs   = Math.floor(fromMs / 1000);
+      const toTs     = Math.floor(toMs   / 1000);
+      const diffDays = (toTs - fromTs) / 86400;
+
+      console.log(dim(`  Fetching market chart for ${chalk.white(id)} from ${chalk.white(opts.from)} to ${chalk.white(opts.to)}...\n`));
+
+      let prices = [], marketCaps = [], totalVolumes = [];
+
+      if (diffDays > 90) {
+        // ── Chunked fetch: stitch 90-day segments ──────────────────────────
+        const totalChunks = Math.ceil(diffDays / 90);
+        console.log(dim(`  Range is ${Math.round(diffDays)} days — fetching in ${totalChunks} chunks of ≤90 days...\n`));
+
+        let chunkFrom = fromTs;
+        let chunkIdx  = 0;
+
+        while (chunkFrom < toTs) {
+          chunkIdx++;
+          const chunkTo = Math.min(chunkFrom + 90 * 86400, toTs);
+
+          process.stdout.write(
+            dim(`  ◌ Fetching chunk ${chunkIdx} of ${totalChunks} (${new Date(chunkFrom * 1000).toISOString().slice(0, 10)} → ${new Date(chunkTo * 1000).toISOString().slice(0, 10)})...`) + '\r'
+          );
+
+          const chunk = await makeRequest(`/coins/${id}/market_chart/range`, {
+            vs_currency: currency,
+            from:        chunkFrom,
+            to:          chunkTo,
+          });
+
+          prices       = prices.concat(chunk.prices       || []);
+          marketCaps   = marketCaps.concat(chunk.market_caps   || []);
+          totalVolumes = totalVolumes.concat(chunk.total_volumes || []);
+
+          chunkFrom = chunkTo + 1;
+        }
+
+        process.stdout.write('\r' + ' '.repeat(80) + '\r');
+        console.log(chalk.green.bold(`  ✔  Stitched ${totalChunks} chunks into ${prices.length} data points\n`));
+
+      } else {
+        // ── Single fetch ───────────────────────────────────────────────────
+        const data = await makeRequest(`/coins/${id}/market_chart/range`, {
+          vs_currency: currency,
+          from:        fromTs,
+          to:          toTs,
+        });
+
+        prices       = data.prices       || [];
+        marketCaps   = data.market_caps   || [];
+        totalVolumes = data.total_volumes || [];
+      }
+
+      displayAndExportChartData(
+        { prices, market_caps: marketCaps, total_volumes: totalVolumes },
+        id,
+        currency,
+        opts.export
+      );
+      return;
+    }
+
+    // ── No valid option provided ──────────────────────────────────────────────
+    console.error(chalk.red('  ✖  Please provide one of:'));
+    console.error(dim('       --date YYYY-MM-DD         (single snapshot)'));
+    console.error(dim('       --days <n>                (relative days back)'));
+    console.error(dim('       --from YYYY-MM-DD --to YYYY-MM-DD  (date range)'));
+    process.exit(1);
   });
 
 // ─── STATUS ───────────────────────────────────────────────────────────────────
