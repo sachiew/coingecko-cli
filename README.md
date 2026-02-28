@@ -1,110 +1,220 @@
 # CoinGecko CLI
 
-Real-time crypto data from your terminal, powered by the [CoinGecko API](https://www.coingecko.com/en/api).
+> Real-time crypto data from your terminal, powered by the [CoinGecko API](https://www.coingecko.com/en/api).
 
 ```
-cg markets --total 10
+  ██████╗ ██████╗ ██╗███╗   ██╗ ██████╗ ███████╗ ██████╗██╗  ██╗ ██████╗
+ ██╔════╝██╔═══██╗██║████╗  ██║██╔════╝ ██╔════╝██╔════╝██║ ██╔╝██╔═══██╗
+ ██║     ██║   ██║██║██╔██╗ ██║██║  ███╗█████╗  ██║     █████╔╝ ██║   ██║
+ ██║     ██║   ██║██║██║╚██╗██║██║   ██║██╔══╝  ██║     ██╔═██╗ ██║   ██║
+ ╚██████╗╚██████╔╝██║██║ ╚████║╚██████╔╝███████╗╚██████╗██║  ██╗╚██████╔╝
+  ╚═════╝ ╚═════╝ ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝ ╚═════╝
 ```
+
+[![npm version](https://img.shields.io/npm/v/@sachiew/coingecko-cli)](https://www.npmjs.com/package/@sachiew/coingecko-cli)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+---
+
+## Features
+
+- **Live prices** — fetch prices for any coin across multiple currencies
+- **Market overview** — ranked market cap table with 24h change and volume
+- **Auto-pagination** — fetch more than 250 coins seamlessly across API pages
+- **Symbol resolution** — use `btc`, `eth`, `sol` instead of remembering coin IDs
+- **Full-text search** — find any coin by name or ticker
+- **Persistent auth** — API key stored securely in your OS config directory
+- **Demo & Pro support** — works with both CoinGecko API tiers
+
+---
 
 ## Installation
 
 ```bash
-npm install -g coingecko-cli
+npm install -g @sachiew/coingecko-cli
 ```
 
-Or clone and link locally:
+This registers two global commands: `coingecko` and the shorter alias `cg`.
+
+### Local development
 
 ```bash
-git clone git@github.com:sachiew/coingecko-cli.git
+git clone https://github.com/sachiew/coingecko-cli.git
 cd coingecko-cli
+npm install
 npm link
 ```
 
-## Usage
+---
 
-Both `coingecko` and `cg` work interchangeably. `cg` is the official shortcut.
+## Requirements
 
-```bash
-cg <command> [options]
-```
-
-## Commands
-
-### `auth`
-Save your CoinGecko API key and plan tier.
-
-```bash
-cg auth
-cg auth --key YOUR_API_KEY --tier demo
-cg auth --key YOUR_API_KEY --tier pro
-```
+| Requirement | Version |
+|---|---|
+| Node.js | >= 18.0.0 |
+| CoinGecko API key | Free tier available |
 
 Get a free API key at [coingecko.com/en/api](https://www.coingecko.com/en/api).
 
 ---
 
-### `price`
-Get the current price of one or more coins.
+## Quick Start
 
 ```bash
+cg auth                        # Configure your API key
+cg price --ids bitcoin         # Get BTC price in USD
+cg markets --total 50          # Top 50 coins by market cap
+cg search solana               # Search for a coin
+cg status                      # Check saved credentials
+```
+
+Run `cg` with no arguments to open the branded landing screen.
+
+---
+
+## Commands
+
+### `auth`
+
+Interactively configure your CoinGecko API key and plan tier. Your credentials are stored locally in your OS config directory (never sent anywhere else).
+
+```bash
+# Interactive flow (recommended)
+cg auth
+
+# Non-interactive (useful in scripts/CI)
+cg auth --key YOUR_API_KEY --tier demo
+cg auth --key YOUR_API_KEY --tier pro
+```
+
+| Option | Description |
+|---|---|
+| `--key` | Your CoinGecko API key |
+| `--tier` | `demo` (free) or `pro` (paid) |
+
+---
+
+### `price`
+
+Fetch the current price, 24h change, and market cap for one or more coins.
+
+```bash
+# Single coin
 cg price --ids bitcoin
-cg price --ids bitcoin,ethereum --vs usd,eur
+
+# Multiple coins, multiple currencies
+cg price --ids bitcoin,ethereum,solana --vs usd,eur,gbp
+
+# Use ticker symbols instead of IDs
 cg price --symbols btc,eth,sol
 ```
 
 | Option | Description | Default |
 |---|---|---|
-| `--ids` | Coin IDs (comma-separated) | `bitcoin` |
-| `--symbols` | Coin symbols — auto-resolved to IDs | — |
-| `--vs` | vs currencies (comma-separated) | `usd` |
+| `--ids` | Coin IDs, comma-separated | `bitcoin` |
+| `--symbols` | Ticker symbols — auto-resolved to IDs via `/search` | — |
+| `--vs` | Quote currencies, comma-separated | `usd` |
+
+**Example output:**
+
+```
+┌───────────────┬──────────────┬───────────────────┐
+│ Coin          │ USD Price    │ 24h Change (USD)  │
+├───────────────┼──────────────┼───────────────────┤
+│ bitcoin       │ $97,432.00   │ ▲ 2.14%           │
+│ ethereum      │ $3,241.58    │ ▼ 0.87%           │
+└───────────────┴──────────────┴───────────────────┘
+```
 
 ---
 
 ### `markets`
-List top coins ranked by market cap.
+
+Display a ranked table of the top coins by market cap, with price, 24h change, market cap, and volume.
 
 ```bash
+# Default: top 100
 cg markets
+
+# Top 500 coins (auto-paginates)
 cg markets --total 500
+
+# Top 50 in EUR, sorted by market cap
 cg markets --total 50 --vs eur --order market_cap_desc
 ```
 
 | Option | Description | Default |
 |---|---|---|
 | `--total` | Number of coins to fetch | `100` |
-| `--vs` | vs currency | `usd` |
-| `--order` | Sort order | `market_cap_desc` |
+| `--vs` | Quote currency | `usd` |
+| `--order` | Sort order (see CoinGecko API docs) | `market_cap_desc` |
 
-Automatically paginates across multiple API pages if `--total` exceeds 250.
+**Auto-pagination:** the CoinGecko API returns a maximum of 250 coins per request. If `--total` exceeds 250, the CLI automatically fetches additional pages and merges the results — no extra flags needed.
+
+```bash
+# This transparently fetches 3 pages behind the scenes
+cg markets --total 700
+```
+
+**Example output:**
+
+```
+┌─────┬──────────────────────┬────────┬────────────────┬────────────┬──────────────┬──────────────┐
+│   # │ Coin                 │ Symbol │ Price (USD)    │ 24h Change │ Market Cap   │ 24h Volume   │
+├─────┼──────────────────────┼────────┼────────────────┼────────────┼──────────────┼──────────────┤
+│   1 │ Bitcoin              │ BTC    │ $97,432.00     │ ▲ 2.14%   │ $1.93T       │ $38.21B      │
+│   2 │ Ethereum             │ ETH    │ $3,241.58      │ ▼ 0.87%   │ $389.74B     │ $18.64B      │
+│   3 │ Tether               │ USDT   │ $1.00          │ ▲ 0.01%   │ $140.53B     │ $92.11B      │
+└─────┴──────────────────────┴────────┴────────────────┴────────────┴──────────────┴──────────────┘
+```
 
 ---
 
 ### `search`
-Search for coins by name or symbol.
+
+Search for any coin by name or ticker symbol. Returns the coin ID needed for other commands.
 
 ```bash
 cg search bitcoin
 cg search ethereum --limit 5
+cg search "wrapped steth"
 ```
 
 | Option | Description | Default |
 |---|---|---|
-| `--limit` | Max results to display | `10` |
+| `--limit` | Max number of results to display | `10` |
 
 ---
 
 ### `status`
-Show your currently configured API credentials.
+
+Display your currently saved API credentials (key is masked for security).
 
 ```bash
 cg status
 ```
 
-## Requirements
+```
+  ✔  Credentials configured
+     Tier  pro
+     Key   CG-zEF**********************
+```
 
-- Node.js >= 18
-- A CoinGecko API key (free tier available)
+---
+
+## API Tiers
+
+| Feature | Demo (Free) | Pro (Paid) |
+|---|---|---|
+| Endpoint | `api.coingecko.com` | `pro-api.coingecko.com` |
+| Rate limit | ~30 calls/min | Higher limits |
+| Historical data | Limited | Full access |
+
+Switch tiers at any time by re-running `cg auth`.
+
+---
 
 ## License
 
-MIT
+MIT © [sachiew](https://github.com/sachiew)
